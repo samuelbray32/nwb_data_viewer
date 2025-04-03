@@ -1,4 +1,4 @@
-# NWB_Data_Viewer
+# NWB Data Viewer
 
 Takes nwb objects from an open nwb file and streams the data for video-like playback
 and interaction.
