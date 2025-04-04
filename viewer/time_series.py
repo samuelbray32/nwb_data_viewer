@@ -4,13 +4,13 @@ import functools
 import napari
 from PyQt5.QtCore import QTimer
 from magicgui import magicgui
-
+from magicgui.widgets import Container, CheckBox, PushButton
 CHUNK_SIZE = 10000
 
 class NwbTimeSeriesViewer:
 
     def __init__(self, nwb_obj, interval_range, n_plot=1000, max_channels=10,
-                 channel_index=None, image_shape = (512, 512)):
+                 channel_index=None, image_shape = (512, 512), channel_options=None):
         """Initialize the time series viewer.
 
         Parameters
@@ -33,6 +33,8 @@ class NwbTimeSeriesViewer:
         self.channel_index = channel_index[:max_channels] if channel_index is not None else np.arange(max_channels)
         self.n_plot = n_plot
         self.image_shape = image_shape
+
+        self.channel_options = channel_options if channel_options is not None else np.arange(nwb_obj.data.shape[1])
 
         self.data_timestamps = nwb_obj.timestamps
         self.data = nwb_obj.data
@@ -101,6 +103,30 @@ class NwbTimeSeriesViewer:
             window = window_scale#int(window_scale)
             self.update(time+self.data_timestamps[0], window=window)
 
+        """
+        @magicgui(
+            auto_call=False,
+            call_button="Apply",
+            channel_picker={
+                "widget_type": "Select",
+                "choices": list(self.channel_options),  # e.g., np.arange(data.shape[1]) or your custom list
+                "allow_multiple": True,
+                "label": "Pick Channels",
+            }
+        )
+        def channel_widget(channel_picker=()):
+            # Convert channel_picker (which is a tuple of items) to a list
+            selected_channels = list(channel_picker)
+
+            # Limit to self.max_channels if user selects too many
+            self.channel_index = selected_channels[: self.max_channels]
+
+            # Clear the cached data so future calls see the new channels
+            self.get_data_chunk.cache_clear()
+
+            # # Rebuild the layer data with the updated channels
+            # self.compile()
+        """
         # playback tools
         def update_slider():
             my_widget.time.value = (my_widget.time.value + 0.05) % (60 * 20)
@@ -120,9 +146,14 @@ class NwbTimeSeriesViewer:
                 self.play_state["timer"].stop()
                 my_widget.play.text = "Play"
 
+        # finish defining the playback widget
         my_widget.play.changed.connect(toggle_play)
-        # stick the widget in the viewer window and run
+        # create the channel selection widget, with link to the payback widget for update
+        channel_widget = self.create_channel_checkbox_widget(my_widget)
+        # stick the widgets in the viewer window and run
+        self.viewer.window.add_dock_widget(channel_widget.native)
         self.viewer.window.add_dock_widget(my_widget.native)
+        self.viewer.window.add_dock_widget(channel_widget.native)
         napari.run()
 
 
@@ -223,3 +254,32 @@ class NwbTimeSeriesViewer:
         return int(ind % CHUNK_SIZE)
 
 
+    #----------- Widget Creation -------------------
+    def create_channel_checkbox_widget(self, play_widget):
+            container = Container(layout="vertical")
+            # Create a checkbox for each channel option.
+            for ch in list(self.channel_options):
+                # Each checkbox is pre-set True if the channel is in the current selection.
+                cb = CheckBox(text=str(ch), value=(ch in self.channel_index))
+                container.append(cb)
+            # Create an Apply button
+            apply_btn = PushButton(text="Apply")
+            container.append(apply_btn)
+
+            def apply_changes(event):
+                # Gather the channels that are checked
+                new_indexes = [int(w.text) for w in container
+                            if isinstance(w, CheckBox) and w.value]
+                # Limit to max_channels if too many are selected
+                self.channel_index = new_indexes[: self.max_channels]
+                # Clear the cached data so that new channels are used
+                self.get_data_chunk.cache_clear()
+                # Rebuild the layer data with the updated channel indices
+                self.update(
+                    play_widget.time.value + self.data_timestamps[0],
+                    play_widget.window_scale.value,
+                )
+                # self.compile()
+
+            apply_btn.changed.connect(apply_changes)
+            return container
