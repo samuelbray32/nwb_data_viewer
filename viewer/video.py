@@ -6,6 +6,7 @@ import imageio
 import os
 import glob
 import tempfile
+import pynwb
 import subprocess
 import shutil
 import time
@@ -127,12 +128,19 @@ class VideoFramePreloader:
 
 
 class NwbVideoViewer(ViewerMixin):
-    def __init__(self, video_path, interval_range, frame_timestamps, tmp_dir=None):
+    def __init__(self,
+                 nwb_obj,
+                #  video_path,
+                 interval_range,
+                #  frame_timestamps,
+                 tmp_dir=None):
+        if not isinstance(nwb_obj, pynwb.image.ImageSeries):
+            raise TypeError("nwb_obj must be an instance of pynwb.image.ImageSeries")
         super().__init__(interval_range)
-        self.video_path = video_path
-        self.frame_timestamps = frame_timestamps
+        self.video_path = nwb_obj.external_file[0]
+        self.frame_timestamps = nwb_obj.timestamps[:]
         # Start the background preloader (asynchronous extraction)
-        self.loader = VideoFramePreloader(video_path, tmp_dir=tmp_dir)
+        self.loader = VideoFramePreloader(self.video_path, tmp_dir=tmp_dir)
         self.current_frame = 1
 
         # Create a napari viewer
