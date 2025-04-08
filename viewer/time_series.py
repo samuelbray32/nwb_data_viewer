@@ -6,10 +6,12 @@ from PyQt5.QtCore import QTimer
 from magicgui import magicgui
 from magicgui.widgets import Container, CheckBox, PushButton
 
+from .viewer_mixin import ViewerMixin
+
 CHUNK_SIZE = 10000
 
 
-class NwbTimeSeriesViewer:
+class NwbTimeSeriesViewer(ViewerMixin):
     def __init__(
         self,
         nwb_obj,
@@ -43,8 +45,8 @@ class NwbTimeSeriesViewer:
             A dictionary where keys are channel groups and values are lists of channel indices.
 
         """
+        super().__init__(interval_range)
 
-        self.interval_range = interval_range
         self.max_channels = max_channels
         self.channel_index = (
             channel_index[:max_channels]
@@ -121,58 +123,59 @@ class NwbTimeSeriesViewer:
         # PLAYBACK_REFRESH = 3 # ms
         # gui tools
         playback_scale = 100
-        self.play_state = {"is_playing": False, "timer": QTimer()}
 
-        @magicgui(
-            auto_call=True,
-            time={
-                "widget_type": "FloatSlider",
-                "max": self.interval_range[1] - self.interval_range[0],
-            },
-            window_scale={
-                "widget_type": "FloatSlider",
-                "max": 3,
-                "min": 0.1,
-                "step": 0.1,
-                "value": 1,
-            },
-            play={"widget_type": "PushButton"},
-        )
-        def my_widget(time: float, play: bool = False, window_scale: float = 1):
-            window = window_scale  # int(window_scale)
-            self.update(time + self.data_timestamps[0], window=window)
 
-        # playback tools
-        def update_slider():
-            my_widget.time.value = (my_widget.time.value + 0.05) % (60 * 20)
+        # @magicgui(
+        #     auto_call=True,
+        #     time={
+        #         "widget_type": "FloatSlider",
+        #         "max": self.interval_range[1] - self.interval_range[0],
+        #     },
+        #     window_scale={
+        #         "widget_type": "FloatSlider",
+        #         "max": 3,
+        #         "min": 0.1,
+        #         "step": 0.1,
+        #         "value": 1,
+        #     },
+        #     play={"widget_type": "PushButton"},
+        # )
+        # def my_widget(time: float, play: bool = False, window_scale: float = 1):
+        #     window = window_scale  # int(window_scale)
+        #     self.update(time + self.data_timestamps[0], window=window)
 
-        def poll_state():
-            if self.play_state["is_playing"]:
-                update_slider()
+        # # playback tools
+        # def update_slider():
+        #     my_widget.time.value = (my_widget.time.value + 0.05) % (60 * 20)
 
-        self.play_state["timer"].timeout.connect(poll_state)
+        # def poll_state():
+        #     if self.play_state["is_playing"]:
+        #         update_slider()
 
-        def toggle_play(event):
-            self.play_state["is_playing"] = not self.play_state["is_playing"]
-            if self.play_state["is_playing"]:
-                self.play_state["timer"].start(3)
-                my_widget.play.text = "Pause"
-            else:
-                self.play_state["timer"].stop()
-                my_widget.play.text = "Play"
+        # self.play_state["timer"].timeout.connect(poll_state)
 
-        # finish defining the playback widget
-        my_widget.play.changed.connect(toggle_play)
+        # def toggle_play(event):
+        #     self.play_state["is_playing"] = not self.play_state["is_playing"]
+        #     if self.play_state["is_playing"]:
+        #         self.play_state["timer"].start(3)
+        #         my_widget.play.text = "Pause"
+        #     else:
+        #         self.play_state["timer"].stop()
+        #         my_widget.play.text = "Play"
+
+        # # finish defining the playback widget
+        # my_widget.play.changed.connect(toggle_play)
+
+        playback_widget = self.create_playback_widget()
         # create the channel selection widget, with link to the payback widget for update
         if self.channel_groups is None:
-            channel_widget = self.create_channel_checkbox_widget_no_groups(my_widget)
+            channel_widget = self.create_channel_checkbox_widget_no_groups(playback_widget)
         else:
-            channel_widget = self.create_channel_checkbox_widget_groups(my_widget)
-        # channel_widget = self.create_channel_checkbox_widget(my_widget)
+            channel_widget = self.create_channel_checkbox_widget_groups(playback_widget)
+
         # stick the widgets in the viewer window and run
         self.viewer.window.add_dock_widget(channel_widget.native)
-        self.viewer.window.add_dock_widget(my_widget.native)
-        self.viewer.window.add_dock_widget(channel_widget.native)
+        self.viewer.window.add_dock_widget(playback_widget.native)
         napari.run()
 
     def update(

@@ -1,7 +1,5 @@
 import napari
 import numpy as np
-from magicgui import magicgui
-from magicgui.widgets import PushButton
 from PyQt5.QtCore import QTimer
 import imageio
 
@@ -11,8 +9,8 @@ import tempfile
 import subprocess
 import threading
 import time
-# imageio is needed for get_frame if you want to load the PNG as an array
-import imageio
+
+from .viewer_mixin import ViewerMixin
 
 class VideoFramePreloader:
     def __init__(self, video_path):
@@ -108,84 +106,50 @@ class VideoFramePreloader:
         return len(self.frame_paths)
 
 
-def napari_video(video_path):
-    # 1) Start the background preloader (asynchronous extraction)
-    loader = VideoFramePreloader(video_path)
+class NwbVideoViewer(ViewerMixin):
+    def __init__(self, video_path, interval_range, frame_timestamps):
+        super().__init__(interval_range)
+        self.video_path = video_path
+        self.frame_timestamps = frame_timestamps
+        # Start the background preloader (asynchronous extraction)
+        self.loader = VideoFramePreloader(video_path)
+        self.current_frame = 1
 
-    # 2) Create a napari viewer
-    viewer = napari.Viewer()
+        # Create a napari viewer
+        self.viewer = napari.Viewer()
 
-    # 3) Initialize an empty image layer (e.g., 3-channel color)
-    dummy_image = np.zeros((100, 100, 3), dtype=np.uint8)
-    image_layer = viewer.add_image(dummy_image, rgb=True, name="video")
 
-    # 4) Build a slider controlling the frame index.
-    #    The maximum is set arbitrarily to 1000. You can update it dynamically
-    #    by polling loader.total_frames() in a separate thread or QTimer.
-    @magicgui(
-        auto_call=True,
-        frame_index={"widget_type": "Slider", "min": 0, "max": 1000, "step": 1},
-    )
-    def frame_slider(frame_index: int = 0):
-        """
-        Called automatically each time the user moves the slider.
-        Attempts to display the selected frame.
-        """
+    def compile(self):
+        # Initialize an empty image layer (e.g., 3-channel color)
+        null_image = None
+        while null_image is None:
+            # Attempt to load the first frame
+            try:
+                null_image = self.loader.get_frame(self.current_frame)
+            except ValueError as e:
+                # If the frame is not yet available, wait and retry
+                print(f"Buffering: {e}")
+                time.sleep(0.1)
+        image_layer = self.viewer.add_image(null_image, rgb=True, name="video")
+
+    def run(self):
+        playback_widget = self.create_playback_widget()
+        self.viewer.window.add_dock_widget(playback_widget.native)
+        napari.run()
+
+    def update(self, time, window):
+        new_frame_index = np.searchsorted(self.frame_timestamps, time)
+        new_frame_index = min(new_frame_index, len(self.frame_timestamps) - 1)
+        if self.current_frame == new_frame_index:
+            return
+        self.current_frame = new_frame_index
+        # Update the image layer with the new frame
+        # Check if the frame is available
         try:
-            total = loader.total_frames()  # how many frames have been extracted so far
-            if frame_index >= total:
-                # The user asked for a frame beyond what's extracted so far.
-                return
-            # Load the requested frame (may raise an error if not yet available)
-            frame_data = loader.get_frame(frame_index)
-            image_layer.data = frame_data
-
+            frame_data = self.loader.get_frame(self.current_frame)
         except ValueError as e:
-            # Custom error if frame not yet extracted
+            # If the frame is not yet available, wait and retry
             print(f"Buffering: {e}")
-        except ValueError as e:
-            # Catch any other read errors
-            print(e)
-
-    # Add the slider to napari
-    viewer.window.add_dock_widget(frame_slider, area="right")
-
-    # 5) Add a Play button that toggles playback using a QTimer
-    play_button = PushButton(label="Play")   # Magicgui also works, but a simple widget is enough
-    timer = QTimer()
-    playback_state = {"is_playing": False}
-
-    def on_timer_tick():
-        """
-        Advance the slider forward by 1 frame on each timer tick.
-        Loop back to frame 0 if we reach the last extracted frame.
-        """
-        current_val = frame_slider.frame_index.value
-        total = loader.total_frames()  # total frames extracted so far
-
-        if current_val < total - 1:
-            frame_slider.frame_index.value = current_val + 1
-        else:
-            # Reset to the first frame. Alternatively, you could stop playback here.
-            frame_slider.frame_index.value = 0
-
-    def toggle_play(event):
-        """
-        Start or stop the timer.
-        """
-        playback_state["is_playing"] = not playback_state["is_playing"]
-        if playback_state["is_playing"]:
-            play_button.text = "Pause"
-            timer.start(5)  # update ~20 frames per second (adjust as needed)
-        else:
-            play_button.text = "Play"
-            timer.stop()
-
-    play_button.changed.connect(toggle_play)
-    timer.timeout.connect(on_timer_tick)
-
-    # Add the play button to napari
-    viewer.window.add_dock_widget(play_button, area="right")
-
-    # 6) Start the napari event loop
-    napari.run()
+            return
+        # Update the image layer with the new frame
+        self.viewer.layers["video"].data = frame_data
