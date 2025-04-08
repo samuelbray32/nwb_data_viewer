@@ -7,7 +7,7 @@ from magicgui import magicgui
 from magicgui.widgets import Container, CheckBox, PushButton
 
 
-class ViewerMixin():
+class ViewerMixin:
     def __init__(self, interval_range):
         self.interval_range = interval_range
         self.play_state = {"is_playing": False, "timer": QTimer()}
@@ -56,7 +56,49 @@ class ViewerMixin():
 
         return playback_widget
 
+    def compile(self):
+        # Placeholder for the compile function. This should be implemented in the subclass.
+        pass
+
     def update(self, time, window):
         pass  # Placeholder for the update function. This should be implemented in the subclass.
 
+    def run(self):
+        """
+        Run the viewer with the playback widget.
+        This method creates the playback widget and other additional widgets, of the subclass.
+        It then adds the playback widget to the viewer's window and starts the napari event loop.
+        """
+        self.playback_widget = self.create_playback_widget()
+        self.add_additional_widgets(self.playback_widget)
+        self.viewer.window.add_dock_widget(self.playback_widget.native)
+        napari.run()
 
+    def add_additional_widgets(self, playback_widget):
+        # Placeholder for adding additional widgets. This should be implemented in the subclass.
+        pass
+
+
+class MultiViewer(ViewerMixin):
+    def __init__(self, interval_range, viewer_list):
+        super().__init__(interval_range)
+        self.viewer = napari.Viewer()
+        self.viewer_list = viewer_list
+
+    def update(self, time, window):
+        # Update all viewers with the new time and window
+        for viewer in self.viewer_list:
+            viewer.update(time, window)
+
+    def compile(self):
+        # Compile all viewers
+
+        for viewer in self.viewer_list:
+            viewer.compile(self.viewer)
+
+    def run(self):
+        self.playback_widget = self.create_playback_widget()
+        for viewer in self.viewer_list:
+            viewer.add_additional_widgets(self.playback_widget)
+        self.viewer.window.add_dock_widget(self.playback_widget.native)
+        napari.run()

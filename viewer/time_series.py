@@ -66,7 +66,6 @@ class NwbTimeSeriesViewer(ViewerMixin):
 
         self.data_timestamps = nwb_obj.timestamps
         self.data = nwb_obj.data
-        self.viewer = napari.Viewer()
 
         self.ind_start = np.searchsorted(self.data_timestamps, interval_range[0])
         self.ind_end = np.searchsorted(self.data_timestamps, interval_range[1])
@@ -86,7 +85,8 @@ class NwbTimeSeriesViewer(ViewerMixin):
             if any(ch in self.channel_index for ch in self.channel_groups[group])
         ]
 
-    def compile(self):
+    def compile(self, viewer=None):
+        self.viewer = viewer if viewer else napari.Viewer()
         # initial display settings
         window = int(1 * self.sample_rate)  # 1 second window
         step = int(window / self.n_plot)  # step size for subsampling
@@ -117,66 +117,16 @@ class NwbTimeSeriesViewer(ViewerMixin):
         )
         self.set_properties()
 
-        # self.update(0, 1)
-
-    def run(self):
-        # PLAYBACK_REFRESH = 3 # ms
-        # gui tools
-        playback_scale = 100
-
-
-        # @magicgui(
-        #     auto_call=True,
-        #     time={
-        #         "widget_type": "FloatSlider",
-        #         "max": self.interval_range[1] - self.interval_range[0],
-        #     },
-        #     window_scale={
-        #         "widget_type": "FloatSlider",
-        #         "max": 3,
-        #         "min": 0.1,
-        #         "step": 0.1,
-        #         "value": 1,
-        #     },
-        #     play={"widget_type": "PushButton"},
-        # )
-        # def my_widget(time: float, play: bool = False, window_scale: float = 1):
-        #     window = window_scale  # int(window_scale)
-        #     self.update(time + self.data_timestamps[0], window=window)
-
-        # # playback tools
-        # def update_slider():
-        #     my_widget.time.value = (my_widget.time.value + 0.05) % (60 * 20)
-
-        # def poll_state():
-        #     if self.play_state["is_playing"]:
-        #         update_slider()
-
-        # self.play_state["timer"].timeout.connect(poll_state)
-
-        # def toggle_play(event):
-        #     self.play_state["is_playing"] = not self.play_state["is_playing"]
-        #     if self.play_state["is_playing"]:
-        #         self.play_state["timer"].start(3)
-        #         my_widget.play.text = "Pause"
-        #     else:
-        #         self.play_state["timer"].stop()
-        #         my_widget.play.text = "Play"
-
-        # # finish defining the playback widget
-        # my_widget.play.changed.connect(toggle_play)
-
-        playback_widget = self.create_playback_widget()
+    def add_additional_widgets(self, playback_widget):
         # create the channel selection widget, with link to the payback widget for update
         if self.channel_groups is None:
-            channel_widget = self.create_channel_checkbox_widget_no_groups(playback_widget)
+            channel_widget = self.create_channel_checkbox_widget_no_groups(
+                playback_widget
+            )
         else:
             channel_widget = self.create_channel_checkbox_widget_groups(playback_widget)
 
-        # stick the widgets in the viewer window and run
         self.viewer.window.add_dock_widget(channel_widget.native)
-        self.viewer.window.add_dock_widget(playback_widget.native)
-        napari.run()
 
     def update(
         self,
@@ -364,4 +314,3 @@ class NwbTimeSeriesViewer(ViewerMixin):
 
         properties = {"group": group_prop}
         return properties
-
