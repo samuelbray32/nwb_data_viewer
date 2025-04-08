@@ -13,6 +13,7 @@ import time
 
 from .viewer_mixin import ViewerMixin
 
+
 class VideoFramePreloader:
     def __init__(self, video_path, tmp_dir=None):
         """
@@ -35,15 +36,19 @@ class VideoFramePreloader:
         out_pattern = os.path.join(self.temp_dir, "frame_%010d.jpg")
         command = [
             "ffmpeg",
-            "-i", self.video_path,
-            "-vsync", "0",
+            "-i",
+            self.video_path,
+            "-vsync",
+            "0",
             # "-vf", "scale=640:-1",
-            out_pattern
+            out_pattern,
         ]
 
         # Launch ffmpeg in the background (asynchronously)
         # We store the Popen object so we can check if it's still running
-        self.ffmpeg_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.ffmpeg_process = subprocess.Popen(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
 
         # Keep track of frame paths. Initially empty; it will fill up as ffmpeg extracts more files.
         self.frame_paths = []
@@ -80,7 +85,7 @@ class VideoFramePreloader:
         """
         Returns True if the ffmpeg process has completed, False if it's still running.
         """
-        return (self.ffmpeg_process.poll() is not None)
+        return self.ffmpeg_process.poll() is not None
 
     def get_frame_path(self, frame_index):
         """
@@ -99,7 +104,9 @@ class VideoFramePreloader:
                 return None
             else:
                 # If ffmpeg is not done, we might be waiting on frames that haven't been created yet
-                Warning(f"Buffering: Frame {frame_index} not yet extracted. Still buffering...")
+                Warning(
+                    f"Buffering: Frame {frame_index} not yet extracted. Still buffering..."
+                )
 
     def get_frame(self, frame_index):
         """
@@ -115,7 +122,9 @@ class VideoFramePreloader:
         # If we got a valid path, load the image
         path = f"{self.temp_dir}/frame_{frame_index:010d}.jpg"
         if not os.path.exists(path):
-            raise ValueError(f"Frame {frame_index} not yet available. Still buffering...")
+            raise ValueError(
+                f"Frame {frame_index} not yet available. Still buffering..."
+            )
         return imageio.imread(path)
 
     def total_frames(self):
@@ -128,12 +137,14 @@ class VideoFramePreloader:
 
 
 class NwbVideoViewer(ViewerMixin):
-    def __init__(self,
-                 nwb_obj,
-                #  video_path,
-                 interval_range,
-                #  frame_timestamps,
-                 tmp_dir=None):
+    def __init__(
+        self,
+        nwb_obj,
+        #  video_path,
+        interval_range,
+        #  frame_timestamps,
+        tmp_dir=None,
+    ):
         if not isinstance(nwb_obj, pynwb.image.ImageSeries):
             raise TypeError("nwb_obj must be an instance of pynwb.image.ImageSeries")
         super().__init__(interval_range)
@@ -151,9 +162,9 @@ class NwbVideoViewer(ViewerMixin):
         Clean up the temporary directory when the object is deleted.
         This is called when the program exits or when the object goes out of scope.
         """
-        if hasattr(self, 'loader'):
+        if hasattr(self, "loader"):
             del self.loader
-        if hasattr(self, 'viewer'):
+        if hasattr(self, "viewer"):
             self.viewer.close()
 
     def compile(self):
