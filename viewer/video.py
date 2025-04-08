@@ -7,13 +7,13 @@ import os
 import glob
 import tempfile
 import subprocess
-import threading
+import shutil
 import time
 
 from .viewer_mixin import ViewerMixin
 
 class VideoFramePreloader:
-    def __init__(self, video_path):
+    def __init__(self, video_path, tmp_dir=None):
         """
         Launch ffmpeg asynchronously to extract every frame from video_path into a temp directory.
         The frames are not guaranteed to be ready until ffmpeg completes,
@@ -22,7 +22,12 @@ class VideoFramePreloader:
         self.video_path = video_path
 
         # Create a dedicated temp directory to store extracted frames
-        self.temp_dir = tempfile.mkdtemp(prefix="video_frame_cache_")
+        if tmp_dir is None:
+            self.temp_dir = tempfile.mkdtemp(prefix="video_frame_cache_")
+        else:
+            self.temp_dir = tmp_dir
+            if not os.path.exists(self.temp_dir):
+                os.makedirs(self.temp_dir)
 
         # ffmpeg command to decode every frame into individual .png files
         # -vsync 0 prevents ffmpeg from duplicating or dropping frames
@@ -41,6 +46,21 @@ class VideoFramePreloader:
 
         # Keep track of frame paths. Initially empty; it will fill up as ffmpeg extracts more files.
         self.frame_paths = []
+
+    def __del__(self):
+        """
+        Clean up the temporary directory when the object is deleted.
+        This is called when the program exits or when the object goes out of scope.
+        """
+        if os.path.exists(self.temp_dir):
+            # Remove the temp directory and all its contents
+            try:
+                print(f"Cleaning up temp directory: {self.temp_dir}")
+                # Use shutil.rmtree to remove the directory and its contents
+                shutil.rmtree(self.temp_dir)
+                # os.rmdir(self.temp_dir)
+            except OSError as e:
+                print(f"Error removing temp directory: {e}")
 
     def _refresh_frame_list(self):
         """
@@ -107,17 +127,26 @@ class VideoFramePreloader:
 
 
 class NwbVideoViewer(ViewerMixin):
-    def __init__(self, video_path, interval_range, frame_timestamps):
+    def __init__(self, video_path, interval_range, frame_timestamps, tmp_dir=None):
         super().__init__(interval_range)
         self.video_path = video_path
         self.frame_timestamps = frame_timestamps
         # Start the background preloader (asynchronous extraction)
-        self.loader = VideoFramePreloader(video_path)
+        self.loader = VideoFramePreloader(video_path, tmp_dir=tmp_dir)
         self.current_frame = 1
 
         # Create a napari viewer
         self.viewer = napari.Viewer()
 
+    def __del__(self):
+        """
+        Clean up the temporary directory when the object is deleted.
+        This is called when the program exits or when the object goes out of scope.
+        """
+        if hasattr(self, 'loader'):
+            del self.loader
+        if hasattr(self, 'viewer'):
+            self.viewer.close()
 
     def compile(self):
         # Initialize an empty image layer (e.g., 3-channel color)
