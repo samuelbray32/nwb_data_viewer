@@ -22,6 +22,8 @@ class VideoFramePreloader:
         so calls to get_frame or get_frame_path might find frames missing if ffmpeg hasn't produced them yet.
         """
         self.video_path = video_path
+        if not os.path.exists(self.video_path):
+            raise FileNotFoundError(f"Video file not found: {self.video_path}")
 
         # Create a dedicated temp directory to store extracted frames
         if tmp_dir is None:
@@ -154,9 +156,6 @@ class NwbVideoViewer(ViewerMixin):
         self.loader = VideoFramePreloader(self.video_path, tmp_dir=tmp_dir)
         self.current_frame = 1
 
-        # Create a napari viewer
-        self.viewer = napari.Viewer()
-
     def __del__(self):
         """
         Clean up the temporary directory when the object is deleted.
@@ -167,7 +166,9 @@ class NwbVideoViewer(ViewerMixin):
         if hasattr(self, "viewer"):
             self.viewer.close()
 
-    def compile(self):
+    def compile(self, viewer=None):
+        self.viewer = viewer if viewer else napari.Viewer()
+
         # Initialize an empty image layer (e.g., 3-channel color)
         null_image = None
         while null_image is None:
