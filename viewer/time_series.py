@@ -59,7 +59,7 @@ class NwbTimeSeriesViewer(ViewerMixin):
         self.channel_options = (
             channel_options
             if channel_options is not None
-            else np.arange(nwb_obj.data.shape[1])
+            else (np.arange(nwb_obj.data.shape[1]) if len(nwb_obj.data.shape) > 1 else [0])
         )
         self.channel_groups = channel_groups
         self.update_displayed_groups()
@@ -200,6 +200,10 @@ class NwbTimeSeriesViewer(ViewerMixin):
 
     @functools.lru_cache(maxsize=int(1e6 // CHUNK_SIZE))
     def get_data_chunk(self, chunk_index):
+        if len(self.data.shape) == 1:
+            return self.data[
+                CHUNK_SIZE * chunk_index : CHUNK_SIZE * (chunk_index + 1)
+            ][:,None]
         return self.data[
             CHUNK_SIZE * chunk_index : CHUNK_SIZE * (chunk_index + 1),
             self.channel_index,
@@ -314,3 +318,44 @@ class NwbTimeSeriesViewer(ViewerMixin):
 
         properties = {"group": group_prop}
         return properties
+
+
+class NwbDigitalSeriesViewer(ViewerMixin):
+    def __init__(self, nwb_obj, interval_range):
+        super().__init__(interval_range)
+        self.n_plot = 1000
+        self.nwb_obj = nwb_obj
+
+
+        self.timestamps = nwb_obj.timestamps
+        self.ind_start = np.searchsorted(self.timestamps, interval_range[0])
+        self.ind_end = np.searchsorted(self.timestamps, interval_range[1])
+        self.initial_state = self.nwb_obj.data[0] if self.ind_start == 0 else self.nwb_obj.data[self.ind_start - 1]
+        self.timestamps = self.timestamps[self.ind_start : self.ind_end]
+
+    def compile(self, viewer=None):
+        self.viewer = viewer if viewer else napari.Viewer()
+        self.tracks_data = np.zeros((self.n_plot,4))
+        self.tracks_data[:,3] = np.linspace(-300, -20, self.n_plot)
+        self.tracks_layer = self.viewer.add_tracks(
+            self.tracks_data,
+            name=self.nwb_obj.name,
+        )
+
+    def update(
+        self,
+        time,
+        window,
+        **kwargs,
+    ):
+        t_window = np.linspace(time - window, time + window, self.n_plot)
+        mark_inds = np.searchsorted(self.timestamps, t_window, side="left")
+        mark_inds = np.clip(mark_inds, 0, len(self.timestamps) - 1)
+        mark_inds += self.ind_start
+        unique_inds = np.unique(mark_inds)
+        accessed_values = self.nwb_obj.data[unique_inds]
+        # Create a mask for the accessed values
+        for ind, val in zip(unique_inds,accessed_values):
+            self.tracks_data[mark_inds == ind, 2] = val * 10
+        self.tracks_layer.data = self.tracks_data
+        self.tracks_layer.refresh()
