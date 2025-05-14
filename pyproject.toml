@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "package_name"
+description = ""
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [{ name = "Samuel Bray", email = "sam.bray@ucsf.edu" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pynwb",
+    "napari",
+    "pyqt",
+    "dandi",
+    "black",
+    "isort",
+
+]
+dynamic = ["version"]
+
+[project.urls]
+"Homepage" = "https://github.com/samuelbray32/nwb_data_viewer"
+"Bug Tracker" = "https://github.com/samuelbray32/nwb_data_viewer/issues"
+
+[project.optional-dependencies]
+test = ["black", "pytest", "pytest-cov"]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/package_name/_version.py"
+
+[tool.hatch.build.targets.sdist]
+exclude = [".git_archival.txt"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/package_name"]

@@ -1,0 +1,13 @@
+name: nwb_data_viewer
+channels:
+  - conda-forge
+dependencies:
+  - "python>=3.8"
+  - pynwb
+  - napari
+  - pyqt
+  - black
+  - isort
+  - pip
+  - pip:
+    - dandi
