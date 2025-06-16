@@ -206,10 +206,12 @@ class NwbTimeSeriesViewer(ViewerMixin):
             return self.data[CHUNK_SIZE * chunk_index : CHUNK_SIZE * (chunk_index + 1)][
                 :, None
             ]
+        ind_sort = np.argsort(self.channel_index)
+        inverse_sort = np.argsort(ind_sort)
         return self.data[
             CHUNK_SIZE * chunk_index : CHUNK_SIZE * (chunk_index + 1),
-            self.channel_index,
-        ]
+            np.sort(self.channel_index),
+        ][:, inverse_sort]
 
     # data streaming tools
     @staticmethod
@@ -257,7 +259,7 @@ class NwbTimeSeriesViewer(ViewerMixin):
         for group in list(self.channel_groups):
             # Each checkbox is pre-set True if the channel is in the current selection.
             gr = CheckBox(
-                text=str(group),
+                text=f"{group:02d}",
                 value=(
                     any(ch in self.channel_index for ch in self.channel_groups[group])
                 ),
@@ -272,10 +274,13 @@ class NwbTimeSeriesViewer(ViewerMixin):
             new_groups = [
                 int(w.text) for w in container if isinstance(w, CheckBox) and w.value
             ]
-            # Limit to max_channels if too many are selected
-            display_channels = list(
-                np.concatenate([self.channel_groups[group] for group in new_groups])
-            )[: self.max_channels]
+            if not new_groups:
+                display_channels = []
+            else:
+                # Limit to max_channels if too many are selected
+                display_channels = list(
+                    np.concatenate([self.channel_groups[group] for group in new_groups])
+                )[: self.max_channels]
 
             self.channel_index = display_channels
             self.update_displayed_groups()
@@ -289,6 +294,7 @@ class NwbTimeSeriesViewer(ViewerMixin):
             )
 
         apply_btn.changed.connect(apply_changes)
+        self.set_properties()
         return container
 
     def set_properties(self, set_color=True):
